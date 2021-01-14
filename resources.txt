@@ -1,0 +1,33 @@
+https://www.learndatasci.com/tutorials/using-databases-python-postgres-sqlalchemy-and-alembic/  -   Main guide for this lab
+
+https://sqlalchemy-utils.readthedocs.io/en/latest/data_types.html#installation
+https://stackoverflow.com/questions/29626830/sqlalchemy-composite-type
+https://docs.sqlalchemy.org/en/13/orm/basic_relationships.html
+https://lectureswww.readthedocs.io/6.www.sync/2.codding/9.databases/2.sqlalchemy/3.orm.html
+https://stackoverflow.com/questions/39869793/when-do-i-need-to-use-sqlalchemy-back-populates
+-------------
+class Parent(Base):
+    __tablename__ = 'parent'
+    id = Column(Integer, primary_key=True)
+    children = relationship("Child", backref="parent")
+
+class Child(Base):
+    __tablename__ = 'child'
+    id = Column(Integer, primary_key=True)
+    parent_id = Column(Integer, ForeignKey('parent.id'))
+-------------
+https://michael-f-bryan.github.io/cheat-sheets/Python/sqlalchemy.html
+https://docs.sqlalchemy.org/en/13/core/type_basics.html#sqlalchemy.types.ARRAY
+-------------
+postman - 7 laba
+-------------
+ # def add_user_room(self):
+    #     current_user = User.query.filter_by(id=self.userId).first()
+    #     rooms_list = current_user.reserved_rooms
+    #     rooms_list.append(self.roomId)
+-------------
+https://docs.sqlalchemy.org/en/14/orm/join_conditions.html#handling-multiple-join-paths
+-------------
+alembic stamp head
+alembic revision --autogenerate
+alembic upgrade head

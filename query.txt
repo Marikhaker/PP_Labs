@@ -1,0 +1,29 @@
+post room
+{
+"id":"123",
+"category_id":"1",
+"name":"12",
+"start_date":"2012-05-29T19:30:03.283Z",
+"end_date":"2012-05-29T19:30:03.283Z"
+}
+post user 
+{
+"id":"123",
+"username":"user1",
+"password":"12",
+"firstName":"name",
+"lastName":"name",
+"email": "randommail",
+"phone":"123",
+"userStatus":"1"
+}
+
+
+
+
+////////////////////
+Show full exception traceback: traceback.print_stack()
+print(traceback.format_exc())
+
+//////////////
+Щоб усе запрацювало спочатку потрібно створити таблиці.
