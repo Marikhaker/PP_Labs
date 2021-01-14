@@ -1,0 +1,76 @@
+### models.py ###
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Date, ARRAY, Boolean, DateTime, ForeignKey, Table
+
+Base = declarative_base()
+
+class Order(Base):
+    __tablename__ = 'orders'
+    id = Column(Integer, primary_key=True)
+    roomId = Column(Integer)
+    userId = Column(Integer)
+    #reserved_dates = Column(ARRAY())
+    # sqlalchemy doesnt have composed types so i just used 2 parameters separately
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    status = Column(String, default='Placed') # Placed/Approved
+    complete = Column(Boolean, default=False)
+
+    def __repr__(self):
+        return "<Order(id={}, roomId={}, userId={}, self.start_date={}, self.end_date={})>" \
+            .format(self.id, self.roomId, self.userId, self.start_date, self.end_date)
+
+class Room(Base):
+    __tablename__ = 'rooms'
+    id = Column(Integer, primary_key=True)
+    category = relationship("Category", uselist=False, back_populates="rooms")
+    name = Column(String, default='Grand House')
+    tags = relationship(
+        "Tag",
+        secondary=tags_table,
+        back_populates="rooms")
+    start_date = Column(ARRAY(DateTime)) # Didn't know how to connect order start/end dates to array of dates in room
+    end_date = Column(ARRAY(DateTime))   # So here are just arrays
+
+    def __repr__(self):
+        return "<Room(id={}, category='{}', name='{}')>" \
+            .format(self.id, self.category, self.name)
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    username = Column(String)
+    firstName = Column(String)
+    lastName = Column(String)
+    email = Column(String)
+    phone = Column(String)
+    password = Column(String)
+    userStatus = Column(Integer)
+    reserved_rooms = Column(ARRAY(Integer)) # Id's of reserved rooms
+
+    def __repr__(self):
+        return "<User(id={}, username='{}', userStatus={})>" \
+            .format(self.id, self.username, self.userStatus)
+
+class Category(Base):
+    __tablename__ = 'categories'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    room_id = Column(Integer, ForeignKey('rooms.id'))
+    room = relationship("Room", back_populates="categories")
+
+class Tag(Base):
+    __tablename__ = 'tags'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    room = relationship(
+        "Room",
+        secondary=tags_table,
+        back_populates="tags")
+
+tags_table = Table('association', Base.metadata,
+    Column('room Id', Integer, ForeignKey('rooms.id')),
+    Column('tag Id', Integer, ForeignKey('tags.id')),
+    Column('tag name', String, ForeignKey('tags.name'))
+)
