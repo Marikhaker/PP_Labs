@@ -1,4 +1,4 @@
-from flask import Flask ,request, jsonify, make_response
+from flask import Flask ,request, jsonify, make_response, redirect, url_for, session
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
@@ -6,13 +6,14 @@ from flask_migrate import Migrate
 from flask_bcrypt import Bcrypt
 from config import DATABASE_URI
 from datetime import datetime
+from flask_login import login_user, logout_user, login_required, login_manager
 
 import traceback
 import sys
-#import os
+import os
 
 app = Flask(__name__)
-bcrypt = Bcrypt(app)
+bcrypt  = Bcrypt(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -26,19 +27,88 @@ ma = Marshmallow(app)
 
 ######################################################################
 
-def get_hashed_password(plain_text_password):
-    # Hash a password for the first time
-    #   (Using bcrypt, the salt is saved into the hash itself)
-    return bcrypt.hashpw(plain_text_password, bcrypt.gensalt())
-
-def check_password(plain_text_password, hashed_password):
-    # Check hashed password. Using bcrypt, the salt is saved into the hash itself
-    return bcrypt.checkpw(plain_text_password, hashed_password)
+# def get_hashed_password(plain_text_password):
+#     # Hash a password for the first time
+#     #   (Using bcrypt, the salt is saved into the hash itself)
+#     return bcrypt.hashpw(plain_text_password, bcrypt.gensalt())
+#
+# def check_password(plain_text_password, hashed_password):
+#     # Check hashed password. Using bcrypt, the salt is saved into the hash itself
+#     return bcrypt.checkpw(plain_text_password, hashed_password)
 
 def auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
+        try:
+            auth = request.authorization
+            current_user = db.session.query(User).filter(User.username == auth.username).first()
+            print("auth: ", auth)
+            print("current_user: ", current_user)
+
+            if auth and current_user:
+                print("Current user: ", current_user.username, ": auth.username: ", auth.username)
+                #if get_hashed_password(auth.password) == current_user.password:
+                if bcrypt.check_password_hash(current_user.password, auth.password):
+                    db.session.logged_in = True
+                    return f(*args, **kwargs)
+                local_responce = make_response('Wrong password!', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+                #local_responce.set_cookie('username', value=current_user.username)
+                local_responce.set_cookie('username', '', expires=0)
+                return local_responce
+
+            local_responce = make_response('Wrong password!', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+            #local_responce.set_cookie('username', value=os.urandom(12).hex())
+            local_responce.set_cookie('username', '', expires=0)
+            return local_responce
+            #return jsonify({"message": "Something is wrong!"}), 400
+        except Exception:
+            print(traceback.format_exc())
+            local_responce = make_response('Wrong password!', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+            #local_responce.set_cookie('username', value=os.urandom(12).hex())
+            local_responce.set_cookie('username', '', expires=0)
+            return local_responce
+    return decorated
+
+@app.route('/login')
+def login():
+    #logout_user()
+    #db.session.remove()
+    #scoped_session.remove()
+    #request.authorization = None
+    print("logout_success")
+    return redirect(url_for('logout_success'))
+        #, make_response('Successful logout!', 200, {'WWW-Authenticate': 'Basic realm="Login required"'})
+
+    #return jsonify({"message": "Success redirect!!"}), 200#redirect(url_for('logout_success'))
+
+@app.route('/logout', methods=['GET'])
+@auth_required
+def logout():
+    #logout_user()
+    #db.session.remove()
+    #scoped_session.remove()
+    #request.authorization = None
+    print("logout_success")
+    return redirect(url_for('logout_success'))
+        #, make_response('Successful logout!', 200, {'WWW-Authenticate': 'Basic realm="Login required"'})
+
+    #return jsonify({"message": "Success redirect!!"}), 200#redirect(url_for('logout_success'))
+
+@app.route('/logout_success')
+def logout_success():
+    #db.session.pop('username', None)
+    #db.session.clear()
+    local_responce = make_response('Successful logout!', 401, {'WWW-Authenticate': 'Basic realm="Login required"'})
+    local_responce.set_cookie('username', '', expires=0)
+    return local_responce
+    #return redirect('/')
+
+# @auth.verify_password
+# def verify_password(username, password):
+#     found_user = db.session.query(User).filter(User.username==username).one_or_none()
+#
+#     if found_user is not None and bcrypt.check_password_hash(found_user.password, password):
+#         return found_user
 
 class Order(db.Model):
     __tablename__ = 'orders'
@@ -74,6 +144,9 @@ class Room(db.Model):
     __tablename__ = 'rooms'
     id = db.Column(db.Integer, primary_key=True)
 
+    """Id of creator user"""
+    userId = db.Column(db.Integer)
+
     category_id = db.Column(db.Integer)
 
     name = db.Column(db.String, default='Grand House')
@@ -81,8 +154,9 @@ class Room(db.Model):
     start_date = db.Column(db.ARRAY(db.DateTime)) # Didn't know how to connect order start/end dates to array of dates in room
     end_date = db.Column(db.ARRAY(db.DateTime))   # So here are just arrays
 
-    def __init__(self, id, category_id, name):
+    def __init__(self, id, userId, category_id, name):
         self.id = id
+        self.userId = userId
         self.category_id = category_id
         self.name = name
         self.start_date = []
@@ -94,8 +168,8 @@ class Room(db.Model):
         print("Check 2")
 
     def __repr__(self):
-        return "<Room(id={}, category_id='{}', name='{}', start_date='{}', end_date'{}')>" \
-            .format(self.id, self.category_id, self.name, self.start_date, self.end_date)
+        return "<Room(id={}, userId={}, category_id='{}', name='{}', start_date='{}', end_date'{}')>" \
+            .format(self.id, self.userId, self.category_id, self.name, self.start_date, self.end_date)
 
 
 class User(db.Model):
@@ -140,7 +214,7 @@ class OrderSchema(ma.Schema):
 # Room Schema
 class RoomSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'category_id', 'name', 'start_date', 'end_date')
+        fields = ('id', 'userId', 'category_id', 'name', 'start_date', 'end_date')
 
 
 # Init schema for user
@@ -158,9 +232,14 @@ rooms_schema = RoomSchema(many=True)
 ############## POST ##############
 # Create a room
 @app.route('/room', methods =['POST'])
+@auth_required
 def add_room():
     try:
         id = request.json['id']
+        #userId = request.json['id']
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+        userId = current_user.id
         category_id = request.json['category_id']
         name = request.json['name']
 
@@ -173,7 +252,7 @@ def add_room():
 
         #end_date = request.json['end_date']
 
-        new_room = Room(id, category_id, name)
+        new_room = Room(id, userId, category_id, name)
         print("Check 1")
 
         db.session.add(new_room)
@@ -218,6 +297,7 @@ def add_room_dates(roomId, start_date, end_date):
 
 
 @app.route('/order',methods=['POST'])
+@auth_required
 def add_order():
     try:
         id = request.json['id']
@@ -291,6 +371,7 @@ def add_user():
 ############## GET ##############
 ### ALL TABLE DATA ###
 @app.route('/order',methods=['GET'])
+@auth_required
 def get_orders():
     try:
         all_orders = Order.query.all()
@@ -303,6 +384,7 @@ def get_orders():
         return jsonify({"message": "List empty!"}), 400
 
 @app.route('/room',methods=['GET'])
+@auth_required
 def get_rooms():
     try:
         all_rooms = Room.query.all()
@@ -315,6 +397,7 @@ def get_rooms():
         return jsonify({"message": "List empty!"}), 400
 
 @app.route('/user',methods=['GET'])
+@auth_required
 def get_users():
     try:
         all_users = User.query.all()
@@ -328,6 +411,7 @@ def get_users():
 
 ### SINGLE TABLE DATA ###
 @app.route('/order/<id>',methods=['GET'])
+@auth_required
 def get_order(id):
     try:
         order = Order.query.get(id)
@@ -338,6 +422,7 @@ def get_order(id):
         return jsonify({"message": "No such id found!"}), 404
 
 @app.route('/room/<id>',methods=['GET'])
+@auth_required
 def get_room(id):
     try:
         room = Room.query.get(id)
@@ -348,6 +433,7 @@ def get_room(id):
 
 # Get single user
 @app.route('/user/<id>',methods=['GET'])
+@auth_required
 def get_user(id):
     try:
         user = User.query.get(id)
@@ -359,12 +445,18 @@ def get_user(id):
 ############## PUT ##############
 
 @app.route('/room/<id>',methods=['PUT'])
+@auth_required
 def update_room(id):
     try:
         room = Room.query.get(id)
 
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+        if (current_user.id != room.userId):
+            return jsonify({'message': 'No access'}), 403
+
         room.name = request.json['name']
-        room.status = request.json['status']
+        room.category_id = request.json['category_id']
 
         db.session.commit()
 
@@ -372,14 +464,22 @@ def update_room(id):
 
         return room_schema.jsonify(room), 200
     except Exception:
+        print(traceback.format_exc())
         db.session.rollback()
         return jsonify({"message":"Invalid input"}),405
 
 
 @app.route('/user/<id>',methods=['PUT'])
+@auth_required
 def update_user(id):
     try:
         user = User.query.get(id)
+
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+        print(current_user.id, " : ", id)
+        if (int(current_user.id) != int(id)):
+            return jsonify({'message': 'No access'}), 403
 
         user.username = request.json['username']
         password = request.json['password']
@@ -400,9 +500,16 @@ def update_user(id):
 ############## DELETE ##############
 
 @app.route('/room/<id>',methods=['DELETE'])
+@auth_required
 def delete_room(id):
     try:
         room = Room.query.get(id)
+
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+        if (current_user.id != room.userId):
+            return jsonify({'message': 'No access'}), 403
+
         db.session.delete(room)
         db.session.commit()
 
@@ -414,6 +521,7 @@ def delete_room(id):
 
 
 @app.route('/order/<id>',methods=['DELETE'])
+@auth_required
 def delete_order(id):
     try:
         order = Order.query.get(id)
@@ -422,6 +530,11 @@ def delete_order(id):
 
         rooms_list = current_user.reserved_rooms
         rooms_list.remove(order.roomId)
+
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+        if (current_user.id != userId):
+            return jsonify({'message': 'No access'}), 403
 
         db.session.delete(order)
         db.session.commit()
@@ -432,9 +545,17 @@ def delete_order(id):
         return jsonify({"message": "Order not found!"}), 404
 
 @app.route('/user/<id>',methods=['DELETE'])
+@auth_required
 def delete_user(id):
     try:
+        auth = request.authorization
+        current_user = db.session.query(User).filter(User.username == auth.username).first()
+
         user = User.query.get(id)
+
+        if(current_user.id != user.id):
+            return jsonify({'message': 'No access'}), 403
+
         db.session.delete(user)
         db.session.commit()
 
@@ -444,6 +565,11 @@ def delete_user(id):
         db.session.rollback()
         return jsonify({"message": "User not found!"}), 404
 
+
+@app.route('/', methods=['GET'])
+@auth_required
+def page_main():
+    return jsonify({"message": "Success!!"}), 200
 
 # Run Server
 if __name__ == '__main__':
